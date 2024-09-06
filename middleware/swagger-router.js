@@ -35,31 +35,31 @@ var defaultOptions = {
   controllers: {},
   useStubs: false // Should we set this automatically based on process.env.NODE_ENV?
 };
-var getHandlerName = function (req) {
+var getHandlerName = function(req) {
   var handlerName;
 
   switch (req.swagger.swaggerVersion) {
-  case '1.2':
-    handlerName = req.swagger.operation.nickname;
-    break;
+    case '1.2':
+      handlerName = req.swagger.operation.nickname;
+      break;
 
-  case '2.0':
-    if (req.swagger.operation['x-swagger-router-controller'] || req.swagger.path['x-swagger-router-controller']) {
-      handlerName = (req.swagger.operation['x-swagger-router-controller'] ?
-        req.swagger.operation['x-swagger-router-controller'] :
-        req.swagger.path['x-swagger-router-controller']) + '_' +
-        (req.swagger.operation.operationId ? req.swagger.operation.operationId : req.method.toLowerCase());
-    } else {
-      handlerName = req.swagger.operation.operationId;
-    }
+    case '2.0':
+      if (req.swagger.operation['x-swagger-router-controller'] || req.swagger.path['x-swagger-router-controller']) {
+        handlerName = (req.swagger.operation['x-swagger-router-controller'] ?
+          req.swagger.operation['x-swagger-router-controller'] :
+          req.swagger.path['x-swagger-router-controller']) + '_' +
+          (req.swagger.operation.operationId ? req.swagger.operation.operationId : req.method.toLowerCase());
+      } else {
+        handlerName = req.swagger.operation.operationId;
+      }
 
-    break;
+      break;
   }
 
   return handlerName;
 };
 
-var handlerCacheFromDir = function (dirOrDirs) {
+var handlerCacheFromDir = async function(dirOrDirs) {
   var handlerCache = {};
   var jsFileRegex = /\.(coffee|js|ts)$/;
   var dirs = [];
@@ -72,25 +72,25 @@ var handlerCacheFromDir = function (dirOrDirs) {
 
   debug('  Controllers:');
 
-  _.each(dirs, function (dir) {
-    _.each(fs.readdirSync(dir), function (file) {
+  for (let dir of dirs) {
+    for (let file of fs.readdirSync(dir)) {
       var controllerName = file.replace(jsFileRegex, '');
       var controller;
 
       if (file.match(jsFileRegex)) {
-        controller = require(path.resolve(path.join(dir, controllerName)));
+        controller = await import(path.resolve(path.join(dir, controllerName + '.js')));
 
         debug('    %s%s:',
-              path.resolve(path.join(dir, file)),
-              (_.isPlainObject(controller) ? '' : ' (not an object, skipped)'));
+          path.resolve(path.join(dir, file)),
+          (_.isPlainObject(controller) ? '' : ' (not an object, skipped)'));
 
-        if (_.isPlainObject(controller)) {
-          _.each(controller, function (value, name) {
+        if (typeof controller === 'object') {
+          _.each(controller, function(value, name) {
             var handlerId = controllerName + '_' + name;
 
             debug('      %s%s',
-                  handlerId,
-                  (_.isFunction(value) ? '' : ' (not a function, skipped)'));
+              handlerId,
+              (_.isFunction(value) ? '' : ' (not a function, skipped)'));
 
             // TODO: Log this situation
 
@@ -100,12 +100,12 @@ var handlerCacheFromDir = function (dirOrDirs) {
           });
         }
       }
-    });
-  });
+    }
+  }
 
   return handlerCache;
 };
-var getMockValue = function (version, schema) {
+var getMockValue = function(version, schema) {
   var type = _.isPlainObject(schema) ? schema.type : schema;
   var value;
 
@@ -114,114 +114,114 @@ var getMockValue = function (version, schema) {
   }
 
   switch (type) {
-  case 'array':
-    value = [getMockValue(version, _.isArray(schema.items) ? schema.items[0] : schema.items)];
+    case 'array':
+      value = [getMockValue(version, _.isArray(schema.items) ? schema.items[0] : schema.items)];
 
-    break;
+      break;
 
-  case 'boolean':
-    if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
-      value = schema.defaultValue;
-    } else if (version === '2.0' && !_.isUndefined(schema.default)) {
-      value = schema.default;
-    } else if (_.isArray(schema.enum)) {
-      value = schema.enum[0];
-    } else {
-      value = 'true';
-    }
+    case 'boolean':
+      if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
+        value = schema.defaultValue;
+      } else if (version === '2.0' && !_.isUndefined(schema.default)) {
+        value = schema.default;
+      } else if (_.isArray(schema.enum)) {
+        value = schema.enum[0];
+      } else {
+        value = 'true';
+      }
 
-    // Convert value if necessary
-    value = value === 'true' || value === true ? true : false;
+      // Convert value if necessary
+      value = value === 'true' || value === true ? true : false;
 
-    break;
+      break;
 
-  case 'file':
-  case 'File':
-    value = 'Pretend this is some file content';
+    case 'file':
+    case 'File':
+      value = 'Pretend this is some file content';
 
-    break;
+      break;
 
-  case 'integer':
-    if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
-      value = schema.defaultValue;
-    } else if (version === '2.0' && !_.isUndefined(schema.default)) {
-      value = schema.default;
-    } else if (_.isArray(schema.enum)) {
-      value = schema.enum[0];
-    } else {
-      value = 1;
-    }
+    case 'integer':
+      if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
+        value = schema.defaultValue;
+      } else if (version === '2.0' && !_.isUndefined(schema.default)) {
+        value = schema.default;
+      } else if (_.isArray(schema.enum)) {
+        value = schema.enum[0];
+      } else {
+        value = 1;
+      }
 
-    // Convert value if necessary
-    if (!_.isNumber(value)) {
-      value = parseInt(value, 10);
-    }
+      // Convert value if necessary
+      if (!_.isNumber(value)) {
+        value = parseInt(value, 10);
+      }
 
-    // TODO: Handle constraints and formats
+      // TODO: Handle constraints and formats
 
-    break;
+      break;
 
-  case 'object':
-    value = {};
+    case 'object':
+      value = {};
 
-    _.each(schema.allOf, function (parentSchema) {
-      _.each(parentSchema.properties, function (property, propName) {
+      _.each(schema.allOf, function(parentSchema) {
+        _.each(parentSchema.properties, function(property, propName) {
+          value[propName] = getMockValue(version, property);
+        });
+      });
+
+      _.each(schema.properties, function(property, propName) {
         value[propName] = getMockValue(version, property);
       });
-    });
 
-    _.each(schema.properties, function (property, propName) {
-      value[propName] = getMockValue(version, property);
-    });
+      break;
 
-    break;
-
-  case 'number':
-    if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
-      value = schema.defaultValue;
-    } else if (version === '2.0' && !_.isUndefined(schema.default)) {
-      value = schema.default;
-    } else if (_.isArray(schema.enum)) {
-      value = schema.enum[0];
-    } else {
-      value = 1.0;
-    }
-
-    // Convert value if necessary
-    if (!_.isNumber(value)) {
-      value = parseFloat(value);
-    }
-
-    // TODO: Handle constraints and formats
-
-    break;
-
-  case 'string':
-    if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
-      value = schema.defaultValue;
-    } else if (version === '2.0' && !_.isUndefined(schema.default)) {
-      value = schema.default;
-    } else if (_.isArray(schema.enum)) {
-      value = schema.enum[0];
-    } else {
-      if (schema.format === 'date') {
-        value = new Date().toISOString().split('T')[0];
-      } else if (schema.format === 'date-time') {
-        value = new Date().toISOString();
+    case 'number':
+      if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
+        value = schema.defaultValue;
+      } else if (version === '2.0' && !_.isUndefined(schema.default)) {
+        value = schema.default;
+      } else if (_.isArray(schema.enum)) {
+        value = schema.enum[0];
       } else {
-        value = 'Sample text';
+        value = 1.0;
       }
-    }
 
-    break;
+      // Convert value if necessary
+      if (!_.isNumber(value)) {
+        value = parseFloat(value);
+      }
+
+      // TODO: Handle constraints and formats
+
+      break;
+
+    case 'string':
+      if (version === '1.2' && !_.isUndefined(schema.defaultValue)) {
+        value = schema.defaultValue;
+      } else if (version === '2.0' && !_.isUndefined(schema.default)) {
+        value = schema.default;
+      } else if (_.isArray(schema.enum)) {
+        value = schema.enum[0];
+      } else {
+        if (schema.format === 'date') {
+          value = new Date().toISOString().split('T')[0];
+        } else if (schema.format === 'date-time') {
+          value = new Date().toISOString();
+        } else {
+          value = 'Sample text';
+        }
+      }
+
+      break;
   }
 
   return value;
 };
-var mockResponse = function (req, res, next, handlerName) {
+var mockResponse = function(req, res, next, handlerName) {
   var method = req.method.toLowerCase();
   var operation = req.swagger.operation;
-  var sendResponse = function (err, response) {
+  var sendResponse = function(err, response) {
     if (err) {
       debug('next with error: %j', err);
       return next(err);
@@ -245,44 +245,44 @@ var mockResponse = function (req, res, next, handlerName) {
   var responseType;
 
   switch (req.swagger.swaggerVersion) {
-  case '1.2':
-    apiDOrSO = req.swagger.apiDeclaration;
-    responseType = operation.type;
+    case '1.2':
+      apiDOrSO = req.swagger.apiDeclaration;
+      responseType = operation.type;
 
-    break;
+      break;
 
-  case '2.0':
-    apiDOrSO = req.swagger.swaggerObject;
+    case '2.0':
+      apiDOrSO = req.swagger.swaggerObject;
 
-    if (method === 'post' && operation.responses['201']) {
-      responseType = operation.responses['201'];
+      if (method === 'post' && operation.responses['201']) {
+        responseType = operation.responses['201'];
 
-      res.statusCode = 201;
-    } else if (method === 'delete' && operation.responses['204']) {
-      responseType = operation.responses['204'];
+        res.statusCode = 201;
+      } else if (method === 'delete' && operation.responses['204']) {
+        responseType = operation.responses['204'];
 
-      res.statusCode = 204;
-    } else if (operation.responses['200']) {
-      responseType = operation.responses['200'];
-    } else if (operation.responses['default']) {
-      responseType = operation.responses['default'];
-    } else {
-      responseType = 'void';
-    }
+        res.statusCode = 204;
+      } else if (operation.responses['200']) {
+        responseType = operation.responses['200'];
+      } else if (operation.responses['default']) {
+        responseType = operation.responses['default'];
+      } else {
+        responseType = 'void';
+      }
 
-    break;
+      break;
   }
 
   if (_.isPlainObject(responseType) || mHelpers.isModelType(spec, responseType)) {
     if (req.swagger.swaggerVersion === '1.2') {
-      spec.composeModel(apiDOrSO, responseType, function (err, result) {
+      spec.composeModel(apiDOrSO, responseType, function(err, result) {
         if (err) {
           return sendResponse(undefined, err);
         } else {
           // Should we handle this differently as undefined typically means the model doesn't exist
           return sendResponse(undefined, _.isUndefined(result) ?
-                                           stubResponse :
-                                           JSON.stringify(getMockValue(req.swagger.swaggerVersion, result)));
+            stubResponse :
+            JSON.stringify(getMockValue(req.swagger.swaggerVersion, result)));
         }
       });
     } else {
@@ -292,29 +292,29 @@ var mockResponse = function (req, res, next, handlerName) {
     return sendResponse(undefined, getMockValue(req.swagger.swaggerVersion, responseType));
   }
 };
-var createStubHandler = function (req, res, next, handlerName) {
+var createStubHandler = function(req, res, next, handlerName) {
   // TODO: Handle headers for 2.0
   // TODO: Handle examples (per mime-type) for 2.0
   // TODO: Handle non-JSON response types
 
-  return function stubHandler (req, res, next) {
+  return function stubHandler(req, res, next) {
     mockResponse(req, res, next, handlerName);
   };
 };
 
-var send405 = function (req, res, next) {
+var send405 = function(req, res, next) {
   var allowedMethods = [];
   var err = new Error('Route defined in Swagger specification (' +
-                        (_.isUndefined(req.swagger.api) ? req.swagger.apiPath : req.swagger.api.path) +
-                        ') but there is no defined ' +
-                      (req.swagger.swaggerVersion === '1.2' ? req.method.toUpperCase() : req.method.toLowerCase()) + ' operation.');
+    (_.isUndefined(req.swagger.api) ? req.swagger.apiPath : req.swagger.api.path) +
+    ') but there is no defined ' +
+    (req.swagger.swaggerVersion === '1.2' ? req.method.toUpperCase() : req.method.toLowerCase()) + ' operation.');
 
   if (!_.isUndefined(req.swagger.api)) {
-    _.each(req.swagger.api.operations, function (operation) {
+    _.each(req.swagger.api.operations, function(operation) {
       allowedMethods.push(operation.method.toUpperCase());
     });
   } else {
-    _.each(req.swagger.path, function (operation, method) {
+    _.each(req.swagger.path, function(operation, method) {
       if (cHelpers.swaggerOperationMethods.indexOf(method.toUpperCase()) !== -1) {
         allowedMethods.push(method.toUpperCase());
       }
@@ -350,7 +350,7 @@ var send405 = function (req, res, next) {
  *
  * @returns the middleware function
  */
-exports = module.exports = function (options) {
+exports = module.exports = async function(options) {
   var handlerCache = {};
 
   debug('Initializing swagger-router middleware');
@@ -364,7 +364,7 @@ exports = module.exports = function (options) {
     debug('  Controllers:');
 
     // Create the handler cache from the passed in controllers object
-    _.each(options.controllers, function (func, handlerName) {
+    _.each(options.controllers, function(func, handlerName) {
       debug('    %s', handlerName);
 
       if (!_.isFunction(func)) {
@@ -375,10 +375,10 @@ exports = module.exports = function (options) {
     handlerCache = options.controllers;
   } else {
     // Create the handler cache from the modules in the controllers directory
-    handlerCache = handlerCacheFromDir(options.controllers);
+    handlerCache = await handlerCacheFromDir(options.controllers);
   }
 
-  return function swaggerRouter (req, res, next) {
+  return function swaggerRouter(req, res, next) {
     var operation = req.swagger ? req.swagger.operation : undefined;
     var handler;
     var handlerName;
@@ -430,3 +430,4 @@ exports = module.exports = function (options) {
     return next(rErr);
   };
 };
+
